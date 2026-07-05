@@ -11,16 +11,15 @@ resolver = "2"
 #   * listed under [workspace.exclude] below (so cargo ignores it here), and
 #   * compiled on demand by `promptrail-daemon/build.rs` via `aya-build`, which
 #     shells out to the pinned nightly for the correct target.
+
 members = [
     "promptrail-common",
     "promptrail-daemon",
-    "promptrail-ebpf",
-    "promptrail-test-harness"
+    "promptrail-test-harness",
 ]
 
-default-members = [
-    "promptrail-daemon",
-    "promptrail-test-harness"
+exclude = [
+    "promptrail-ebpf",
 ]
 
 # Single source of truth for versions shared across member crates. Pins are
