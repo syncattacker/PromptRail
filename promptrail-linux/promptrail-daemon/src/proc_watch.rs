@@ -51,20 +51,24 @@ impl TlsBackend {
 /// gone or unreadable (races are normal: processes exit mid-scan).
 fn classify_pid(pid: u32) -> Option<TlsBackend> {
     let maps = fs::read_to_string(format!("/proc/{pid}/maps")).ok()?;
-    let mut backend = TlsBackend::Opaque;
+    let (mut openssl, mut gnutls, mut nss) = (false, false, false);
     for line in maps.lines() {
-        // maps lines end in a pathname for file-backed regions; substring match
-        // is sufficient and avoids parsing the address/permission columns.
-        if line.contains("libssl.so") || line.contains("libcrypto.so") {
-            // OpenSSL wins outright: it's what we hook. Return early.
-            return Some(TlsBackend::OpenSsl);
+        // Only libssl carries SSL_read/SSL_write. libcrypto is a common
+        // transitive dep (GnuTLS tooling, p11-kit) and must NOT imply OpenSSL.
+        if line.contains("libssl.so") {
+            openssl = true;
         } else if line.contains("libgnutls.so") {
-            backend = TlsBackend::GnuTls;
+            gnutls = true;
         } else if line.contains("libnss3.so") || line.contains("libnspr4.so") {
-            backend = TlsBackend::Nss;
+            nss = true;
         }
     }
-    Some(backend)
+    // GnuTLS/NSS take precedence: if present, report the backend our OpenSSL
+    // hook does NOT cover, so the coverage gap stays visible.
+    Some(if gnutls { TlsBackend::GnuTls }
+         else if nss { TlsBackend::Nss }
+         else if openssl { TlsBackend::OpenSsl }
+         else { TlsBackend::Opaque })
 }
 
 /// Read a process's `comm` for friendlier logging. Best-effort.
