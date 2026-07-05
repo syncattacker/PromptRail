@@ -18,6 +18,7 @@ anyhow = { workspace = true }
 # aya-build compiles the excluded promptrail-ebpf crate for bpfel-unknown-none
 # using the pinned nightly, and drops the object in OUT_DIR for include_bytes.
 [build-dependencies]
+aya-build = "0.2.0"
 anyhow = { workspace = true }
 
 [[bin]]
