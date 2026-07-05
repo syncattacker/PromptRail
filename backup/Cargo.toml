@@ -18,6 +18,10 @@ members = [
     "promptrail-ebpf",
 ]
 
+exclude = [
+    "promptrail-ebpf",
+]
+
 # Single source of truth for versions shared across member crates. Pins are
 # grounded against crates.io at scaffold time (see the CI `ebpf-build` job for
 # the toolchain side).
