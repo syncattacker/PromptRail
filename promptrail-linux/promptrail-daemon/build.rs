@@ -21,7 +21,7 @@ fn main() -> anyhow::Result<()> {
     println!("cargo:rerun-if-changed=../promptrail-common/src");
 
     let daemon_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
-    let ebpf_dir = daemon_dir.join("..\promptrail-ebpf");
+    let ebpf_dir = daemon_dir.join("../promptrail-ebpf");
     let ebpf_dir = ebpf_dir.canonicalize().unwrap_or(ebpf_dir);
 
     let original_dir = env::current_dir()?;
