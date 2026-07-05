@@ -90,9 +90,9 @@ fn list_pids() -> Vec<u32> {
 }
 
 /// Best-effort resolution of a concrete `libssl` path from any process that has
-/// it mapped. Returned purely for logging/diagnostics — the actual attach uses
-/// the `"ssl"` basename and lets the kernel/ld.so cache resolve it, so a `None`
-/// here does not block attachment.
+/// it mapped. Returned purely for logging/diagnostics, but used as the attach
+/// target when available because the bare `"ssl"` basename may fail to resolve
+/// in some environments.
 pub fn resolve_libssl_path() -> Option<PathBuf> {
     for pid in list_pids() {
         let Ok(maps) = fs::read_to_string(format!("/proc/{pid}/maps")) else {
@@ -108,6 +108,67 @@ pub fn resolve_libssl_path() -> Option<PathBuf> {
         }
     }
     None
+}
+
+/// Resolve the most specific libssl target we can use for uprobe attachment.
+/// Prefer an already-loaded absolute path, otherwise fall back to a common
+/// on-disk library name and finally to the historical basename.
+pub fn resolve_libssl_target() -> String {
+    if let Some(path) = resolve_libssl_path() {
+        return path.display().to_string();
+    }
+
+    if let Some(path) = find_libssl_on_disk() {
+        return path.display().to_string();
+    }
+
+    "ssl".to_owned()
+}
+
+fn find_libssl_on_disk() -> Option<PathBuf> {
+    let search_roots = [
+        "/lib",
+        "/lib64",
+        "/usr/lib",
+        "/usr/lib64",
+        "/lib/x86_64-linux-gnu",
+        "/usr/lib/x86_64-linux-gnu",
+        "/lib/aarch64-linux-gnu",
+        "/usr/lib/aarch64-linux-gnu",
+    ];
+
+    for root in search_roots {
+        let Ok(entries) = fs::read_dir(root) else {
+            continue;
+        };
+        for entry in entries.flatten() {
+            let candidate = entry.path();
+            let Some(name) = candidate.file_name().and_then(|n| n.to_str()) else {
+                continue;
+            };
+            if name == "libssl.so" || name.starts_with("libssl.so.") {
+                return Some(candidate);
+            }
+        }
+    }
+
+    None
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{find_libssl_on_disk, resolve_libssl_target};
+
+    #[test]
+    fn resolve_libssl_target_prefers_non_empty_string() {
+        let target = resolve_libssl_target();
+        assert!(!target.is_empty());
+    }
+
+    #[test]
+    fn find_libssl_on_disk_is_not_panicking() {
+        let _ = find_libssl_on_disk();
+    }
 }
 
 /// Periodically scan `/proc` and log newly observed processes and their TLS

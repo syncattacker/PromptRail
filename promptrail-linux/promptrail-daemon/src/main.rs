@@ -30,11 +30,6 @@ mod proc_watch;
 
 use error::AgentError;
 
-/// The library the uprobes attach to. Passed as a bare name so the kernel/ld.so
-/// cache resolves the concrete path; `AllProcesses` scope then fans the single
-/// attach out to every process that maps it.
-const LIBSSL_TARGET: &str = "ssl";
-
 /// (eBPF program function name, exported symbol to attach to). Entry and return
 /// probes are distinct programs; both are `UProbe` in userspace terms.
 const PROBES: &[(&str, &str)] = &[
@@ -96,9 +91,10 @@ async fn run() -> anyhow::Result<()> {
         }
     })?;
 
+    let libssl_target = proc_watch::resolve_libssl_target();
     match proc_watch::resolve_libssl_path() {
-        Some(path) => info!(libssl = %path.display(), "resolved libssl for diagnostics"),
-        None => info!("no process currently maps libssl; attach still valid via ld.so cache"),
+        Some(path) => info!(libssl = %path.display(), target = %libssl_target, "resolved libssl for diagnostics and attach"),
+        None => info!(target = %libssl_target, "no process currently maps libssl; using discovered target for attach"),
     }
 
     // Background: /proc backend discovery and periodic stats reporting. These
@@ -127,6 +123,9 @@ async fn run() -> anyhow::Result<()> {
 
 /// Load and attach all four uprobe programs. Any failure is fatal and typed.
 fn attach_probes(ebpf: &mut Ebpf) -> Result<(), AgentError> {
+    let libssl_target = proc_watch::resolve_libssl_target();
+    info!(target = %libssl_target, "attaching uprobes to libssl target");
+
     for &(prog_name, symbol) in PROBES {
         let program: &mut UProbe = ebpf
             .program_mut(prog_name)
@@ -143,15 +142,15 @@ fn attach_probes(ebpf: &mut Ebpf) -> Result<(), AgentError> {
         })?;
 
         program
-            .attach(symbol, LIBSSL_TARGET, UProbeScope::AllProcesses)
+            .attach(symbol, &libssl_target, UProbeScope::AllProcesses)
             .map_err(|source| AgentError::Attach {
                 program: prog_name,
                 symbol,
-                target: LIBSSL_TARGET.to_owned(),
+                target: libssl_target.clone(),
                 source,
             })?;
 
-        info!(program = prog_name, symbol, target = LIBSSL_TARGET, "attached uprobe");
+        info!(program = prog_name, symbol, target = %libssl_target, "attached uprobe");
     }
     Ok(())
 }
