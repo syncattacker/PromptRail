@@ -14,8 +14,13 @@ resolver = "2"
 members = [
     "promptrail-common",
     "promptrail-daemon",
-    "promptrail-test-harness",
     "promptrail-ebpf",
+    "promptrail-test-harness"
+]
+
+default-members = [
+    "promptrail-daemon",
+    "promptrail-test-harness"
 ]
 
 # Single source of truth for versions shared across member crates. Pins are
@@ -72,3 +77,9 @@ anyhow = "1"
 lto = true
 codegen-units = 1
 strip = true
+
+[profile.dev]
+panic = "abort"
+
+[profile.release]
+panic = "abort"
