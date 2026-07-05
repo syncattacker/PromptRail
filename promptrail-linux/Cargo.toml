@@ -1,0 +1,77 @@
+[workspace]
+resolver = "2"
+
+# NOTE the deliberate ABSENCE of `promptrail-ebpf` from this list.
+#
+# The eBPF crate must be built for the `bpfel-unknown-none` target with a
+# *pinned nightly* and `-Z build-std=core`. The rest of the workspace builds for
+# the host with *stable*. If `promptrail-ebpf` were a normal workspace member,
+# `cargo build` at the root would try to compile it with the stable host
+# toolchain and fail (no `std`, wrong target). Instead it is:
+#   * listed under [workspace.exclude] below (so cargo ignores it here), and
+#   * compiled on demand by `promptrail-daemon/build.rs` via `aya-build`, which
+#     shells out to the pinned nightly for the correct target.
+members = [
+    "promptrail-common",
+    "promptrail-daemon",
+    "promptrail-test-harness",
+]
+
+exclude = [
+    "promptrail-ebpf",
+]
+
+# Single source of truth for versions shared across member crates. Pins are
+# grounded against crates.io at scaffold time (see the CI `ebpf-build` job for
+# the toolchain side).
+[workspace.dependencies]
+promptrail-common = { path = "promptrail-common" }
+
+# --- Aya (userspace side). Doc pins "Aya 0.12+"; 0.14.0 satisfies that and is
+#     the current line whose API matches aya-ebpf 0.2.x used by the probe crate.
+aya = "0.14.0"
+
+# --- Async runtime + structured logging (doc §6.1 lists tokio; the tracing
+#     stack satisfies the "structured tracing, not println" requirement).
+tokio = { version = "1", features = ["rt-multi-thread", "macros", "signal", "net", "time", "sync"] }
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+
+# --- Error handling. thiserror for typed library errors, anyhow for the binary
+#     top level. Every syscall/map/IPC boundary returns a typed error (see daemon).
+thiserror = "2"
+anyhow = "1"
+
+# ---------------------------------------------------------------------------
+# LATER-PHASE DEPENDENCIES — intentionally commented out.
+#
+# These belong to the roadmap but are NOT pulled in for Phase 1 / Workstream 1.
+# Adding an unused dependency would either bloat the build or trip the
+# `-D warnings` clippy gate. They are listed here so the roadmap stays visible
+# in one place; uncomment when the corresponding phase begins.
+# ---------------------------------------------------------------------------
+
+# Debug-only (any phase) — kernel->user logging from eBPF. Deliberately NOT used
+# in WS1: drop/fault visibility comes from the per-CPU STATS counter map, which
+# is the right mechanism for the hot SSL_* datapath. Reintroduce behind a debug
+# feature if step-through kernel logging is ever needed.
+# aya-log = "0.3.0"        # pairs with aya-log-ebpf = "0.2.0" in the ebpf crate
+
+# Phase 2 — Layer 2 NLP / JSON schema matching (Tech Stack §2.2, §6.1)
+# serde = { version = "1", features = ["derive"] }
+# serde_json = "1"
+
+# Phase 2 — gRPC payload deconstruction (Tech Stack §2.2)
+# prost = "0.13"
+
+# Phase 1 (agent -> cloud transport) / Phase 4 (console) — mutual-TLS gRPC.
+# WS1 "done" is plaintext to stdout, so no transport is wired yet.
+# tonic = "0.12"
+# rustls = "0.23"
+
+# Release profile for the userspace binaries. eBPF profile lives in the ebpf
+# crate's own manifest (different target, different constraints).
+[profile.release]
+lto = true
+codegen-units = 1
+strip = true

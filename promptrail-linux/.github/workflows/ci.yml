@@ -1,0 +1,101 @@
+name: ci
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+# Cancel superseded runs on the same ref to save runner minutes.
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  # The eBPF nightly pin. MUST match promptrail-ebpf/rust-toolchain.toml and
+  # promptrail-daemon/build.rs (EBPF_TOOLCHAIN). One place to bump it here.
+  EBPF_NIGHTLY: nightly-2026-06-15
+  # bpf-linker is pinned alongside the nightly: their LLVM versions must agree.
+  BPF_LINKER_VERSION: 0.10.3
+  CARGO_TERM_COLOR: always
+
+jobs:
+  # Formatting is cheap and needs no build; run it first so trivial failures are
+  # fast. `fail-fast` across jobs is achieved by keeping each job independent and
+  # letting a required-check gate block merge on any failure.
+  fmt:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install stable + rustfmt
+        run: rustup toolchain install stable --profile minimal --component rustfmt
+      - run: cargo +stable fmt --all -- --check
+
+  # Clippy, build, and test all compile the daemon, whose build.rs invokes
+  # aya-build to compile the (excluded) eBPF crate. That means these jobs need
+  # the FULL eBPF toolchain — the nightly, rust-src, and bpf-linker — even though
+  # they are "userspace" checks. This is the single biggest gotcha in the CI.
+  clippy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ./.github/actions/setup-ebpf-toolchain
+      - uses: Swatinem/rust-cache@v2
+      - run: cargo clippy --workspace --all-targets -- -D warnings
+
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ./.github/actions/setup-ebpf-toolchain
+      - uses: Swatinem/rust-cache@v2
+      - run: cargo build --workspace
+
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ./.github/actions/setup-ebpf-toolchain
+      - uses: Swatinem/rust-cache@v2
+      - run: cargo test --workspace
+
+  # Standalone check that the eBPF object itself compiles to valid bytecode with
+  # the pinned toolchain. This is the real gate for the probe crate, since the
+  # workspace jobs above only build it transitively.
+  ebpf-build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ./.github/actions/setup-ebpf-toolchain
+      - uses: Swatinem/rust-cache@v2
+      - name: Build eBPF object
+        working-directory: promptrail-ebpf
+        run: cargo +${{ env.EBPF_NIGHTLY }} build --release
+
+  # ---------------------------------------------------------------------------
+  # WORKSTREAM 1 EXIT-GATE ARTIFACT — do not delete.
+  #
+  # The kernel 7.x dev VM is very forgiving and can mask portability bugs (e.g.
+  # relying on helpers or verifier leniency absent on the enterprise floor). The
+  # WS1 exit criterion is: the eBPF object LOADS AND RUNS on a 5.15 kernel.
+  #
+  # This job is intentionally commented out until it is wired up. Enabling it is
+  # a required step BEFORE declaring the WS1 gate met. Left here, named and
+  # visible, precisely so it is not forgotten while the workstream moves fast.
+  # ---------------------------------------------------------------------------
+  # ebpf-portability-5_15:
+  #   runs-on: ubuntu-latest
+  #   needs: [ebpf-build]
+  #   steps:
+  #     - uses: actions/checkout@v4
+  #     - uses: ./.github/actions/setup-ebpf-toolchain
+  #     - name: Build eBPF object
+  #       working-directory: promptrail-ebpf
+  #       run: cargo +${{ env.EBPF_NIGHTLY }} build --release
+  #     - name: Load-test under a 5.15 kernel
+  #       run: |
+  #         echo "TODO: enable before WS1 gate."
+  #         echo "Boot/enter a 5.15 environment (VM image or nested-virt runner),"
+  #         echo "then `bpftool prog load` the object and assert it verifies +"
+  #         echo "attaches. A container alone is insufficient: the ring buffer and"
+  #         echo "uprobe attach are exercised against the HOST kernel, so the runner"
+  #         echo "kernel — not a container image — must be 5.15."

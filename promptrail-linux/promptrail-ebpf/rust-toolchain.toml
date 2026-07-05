@@ -1,0 +1,20 @@
+# PINNED nightly for the eBPF object ONLY.
+#
+# WHY pinned and not `nightly`: `bpf-linker` embeds its own LLVM. When the
+# nightly rustc's LLVM/codegen expectations drift from the LLVM baked into
+# bpf-linker, `-Z build-std=core` can miscompile silently or the link step
+# fails with opaque errors. Pinning both the nightly date AND the bpf-linker
+# version (0.10.3 — see CI) keeps them a validated pair.
+#
+# >>> ACTION REQUIRED ON FIRST BUILD <<<
+# Set `channel` below to the nightly you actually have installed and verified.
+# Discover it with:
+#     rustc +nightly --version --verbose        # read the "commit-date" line
+# then either set the date here to match, or install this exact one:
+#     rustup toolchain install nightly-2026-06-15
+#     rustup component add rust-src --toolchain nightly-2026-06-15
+# The SAME string must appear in promptrail-daemon/build.rs (EBPF_TOOLCHAIN).
+[toolchain]
+channel = "nightly-2026-06-15"
+components = ["rust-src"]
+targets = ["bpfel-unknown-none"]

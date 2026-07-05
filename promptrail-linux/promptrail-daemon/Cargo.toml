@@ -1,0 +1,26 @@
+[package]
+name = "promptrail-daemon"
+version = "0.1.0"
+edition = "2021"
+license = "Proprietary"
+publish = false
+description = "PromptRail userspace daemon: loads eBPF probes, drains the ring buffer, attributes plaintext."
+
+[dependencies]
+promptrail-common = { workspace = true }
+aya = { workspace = true }
+tokio = { workspace = true }
+tracing = { workspace = true }
+tracing-subscriber = { workspace = true }
+thiserror = { workspace = true }
+anyhow = { workspace = true }
+
+# aya-build compiles the excluded promptrail-ebpf crate for bpfel-unknown-none
+# using the pinned nightly, and drops the object in OUT_DIR for include_bytes.
+[build-dependencies]
+aya-build = "0.2.0"
+anyhow = { workspace = true }
+
+[[bin]]
+name = "promptrail-daemon"
+path = "src/main.rs"

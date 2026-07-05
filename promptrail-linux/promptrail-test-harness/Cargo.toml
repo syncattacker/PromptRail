@@ -1,0 +1,17 @@
+[package]
+name = "promptrail-test-harness"
+version = "0.1.0"
+edition = "2021"
+license = "Proprietary"
+publish = false
+description = "Runtime load generator and capture-verification harness for the PromptRail Linux agent."
+
+[dependencies]
+# Links the shared ABI on purpose: the harness asserts it was built against the
+# same Event layout the daemon expects, catching version skew between the two.
+promptrail-common = { workspace = true }
+anyhow = { workspace = true }
+
+[[bin]]
+name = "promptrail-test-harness"
+path = "src/main.rs"

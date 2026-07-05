@@ -1,0 +1,15 @@
+[package]
+name = "promptrail-common"
+version = "0.1.0"
+edition = "2021"
+license = "Proprietary"
+publish = false
+description = "Shared no_std ABI types crossing the PromptRail eBPF/userspace boundary."
+
+# Intentionally ZERO dependencies. This crate is linked into the no_std eBPF
+# object; every dependency added here must itself be no_std-clean, so we keep it
+# empty and push all std-only logic into the daemon.
+[dependencies]
+
+[lints.clippy]
+# Workspace-wide zero-warning policy is enforced in CI; nothing crate-specific.

@@ -1,0 +1,34 @@
+name: setup-ebpf-toolchain
+description: >
+  Install the toolchain required to build the PromptRail eBPF object: stable (for
+  userspace), the pinned nightly + rust-src (for -Z build-std), and the pinned
+  bpf-linker. LLVM is installed because bpf-linker links against it.
+
+runs:
+  using: composite
+  steps:
+    - name: Install LLVM (bpf-linker dependency)
+      shell: bash
+      run: |
+        # bpf-linker links against LLVM. Pin a major version known to match the
+        # bpf-linker release; adjust if bpf-linker's requirement changes.
+        sudo apt-get update
+        sudo apt-get install -y llvm
+
+    - name: Install stable toolchain
+      shell: bash
+      run: rustup toolchain install stable --profile minimal --component rustfmt clippy
+
+    - name: Install pinned nightly + rust-src + bpf target
+      shell: bash
+      run: |
+        rustup toolchain install "${EBPF_NIGHTLY}" --profile minimal --component rust-src
+        rustup target add bpfel-unknown-none --toolchain "${EBPF_NIGHTLY}" || true
+
+    - name: Install pinned bpf-linker
+      shell: bash
+      run: |
+        # --locked keeps bpf-linker's own deps reproducible. This step is the
+        # long pole in CI time; rust-cache above will not cache it, so consider a
+        # dedicated tool cache if runtime becomes a problem.
+        cargo install bpf-linker --version "${BPF_LINKER_VERSION}" --locked

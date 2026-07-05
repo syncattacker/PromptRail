@@ -1,0 +1,39 @@
+[package]
+name = "promptrail-ebpf"
+version = "0.1.0"
+edition = "2021"
+license = "Proprietary"
+publish = false
+description = "PromptRail eBPF uprobe programs for OpenSSL SSL_write/SSL_read plaintext capture."
+
+[dependencies]
+# aya-ebpf 0.2.1 is the kernel-side crate matched to userspace aya 0.14.0.
+aya-ebpf = "0.2.1"
+# NOTE: aya-log-ebpf is intentionally NOT a dependency for Workstream 1.
+# Drop/fault visibility is provided by a per-CPU counter map (see STATS in
+# src/main.rs), which is the correct low-overhead mechanism for the hot SSL_*
+# datapath. Kernel-side aya-log can be reintroduced as an opt-in debug feature
+# later without changing the capture path.
+# The shared ABI. Must stay no_std-clean (it is).
+promptrail-common = { path = "../promptrail-common" }
+
+# A single eBPF object with all programs. `path` is explicit so `aya-build`
+# (invoked from the daemon) finds it deterministically.
+[[bin]]
+name = "promptrail-ebpf"
+path = "src/main.rs"
+
+# eBPF objects are always built optimized: the verifier rejects the huge,
+# un-inlined stack frames that a debug build produces. This applies even when
+# the daemon itself is built in debug.
+[profile.dev]
+opt-level = 3
+debug = false
+overflow-checks = false
+
+[profile.release]
+opt-level = 3
+debug = false
+overflow-checks = false
+lto = true
+codegen-units = 1

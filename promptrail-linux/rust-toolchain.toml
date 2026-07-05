@@ -1,0 +1,9 @@
+# Toolchain for the WORKSPACE (userspace daemon, common, test harness).
+#
+# The eBPF crate is excluded from the workspace and pins its OWN nightly in
+# promptrail-ebpf/rust-toolchain.toml — do not "unify" these. Userspace builds
+# on stable per the Tech Stack doc (Rust "Stable 1.75+"); the eBPF object needs
+# nightly for `-Z build-std`. Two toolchains, by design.
+[toolchain]
+channel = "stable"
+components = ["clippy", "rustfmt"]
