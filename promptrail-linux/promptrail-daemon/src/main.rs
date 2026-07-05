@@ -33,11 +33,16 @@ use error::AgentError;
 /// (eBPF program function name, exported symbol to attach to). Entry and return
 /// probes are distinct programs; both are `UProbe` in userspace terms.
 const PROBES: &[(&str, &str)] = &[
-    ("ssl_write_entry", "SSL_write"),
-    ("ssl_write_ret", "SSL_write"),
-    ("ssl_read_entry", "SSL_read"),
-    ("ssl_read_ret", "SSL_read"),
+    ("ssl_write_entry",    "SSL_write"),
+    ("ssl_write_ret",      "SSL_write"),
+    ("ssl_read_entry",     "SSL_read"),
+    ("ssl_read_ret",       "SSL_read"),
+    ("ssl_write_ex_entry", "SSL_write_ex"),   // ← new
+    ("ssl_write_ex_ret",   "SSL_write_ex"),   // ← new
+    ("ssl_read_ex_entry",  "SSL_read_ex"),    // ← new
+    ("ssl_read_ex_ret",    "SSL_read_ex"),    // ← new
 ];
+
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {

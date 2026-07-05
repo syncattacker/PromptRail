@@ -43,6 +43,7 @@ struct SslArgs {
     ssl: u64,
     /// The user-space `buf` pointer (arg 1) to read plaintext from on return.
     buf: u64,
+    count_ptr: u64,
 }
 
 /// Ring buffer carrying `Event`s to userspace.
@@ -103,6 +104,11 @@ pub fn ssl_read_entry(ctx: ProbeContext) -> u32 {
     0
 }
 
+#[uretprobe]
+pub fn ssl_write_ex_ret(ctx: RetProbeContext) -> u32 { on_return_ex(&ctx, direction::WRITE); 0 }
+#[uretprobe]
+pub fn ssl_read_ex_ret(ctx: RetProbeContext)  -> u32 { on_return_ex(&ctx, direction::READ);  0 }
+
 // ---------------------------------------------------------------------------
 // Return probes: recover the stash, copy `ret` bytes, submit an Event.
 // ---------------------------------------------------------------------------
@@ -133,6 +139,17 @@ fn stash_entry(ctx: &ProbeContext) -> Result<(), i64> {
         buf: buf as u64,
     };
     // `insert` can fail if the map is full; propagate so the caller can log.
+    ACTIVE_CALLS.insert(&key, &args, 0).map_err(|e| e as i64)
+}
+
+#[inline(always)]
+fn stash_entry_ex(ctx: &ProbeContext) -> Result<(), i64> {
+    let ssl:   *const c_void = ctx.arg(0).ok_or(-1_i64)?;
+    let buf:   *const c_void = ctx.arg(1).ok_or(-1_i64)?;
+    // arg 2 is size_t num (ignored); arg 3 is size_t *written / *readbytes.
+    let count: *const c_void = ctx.arg(3).ok_or(-1_i64)?;
+    let key = bpf_get_current_pid_tgid();
+    let args = SslArgs { ssl: ssl as u64, buf: buf as u64, count_ptr: count as u64 };
     ACTIVE_CALLS.insert(&key, &args, 0).map_err(|e| e as i64)
 }
 
@@ -167,6 +184,27 @@ fn on_return(ctx: &RetProbeContext, dir: u8) {
     // emit_event increments the specific failure counter itself, so there is
     // nothing to do with the error here beyond letting it drop.
     let _ = emit_event(args, dir, ret as i64);
+}
+
+#[inline(always)]
+fn on_return_ex(ctx: &RetProbeContext, dir: u8) {
+    let key = bpf_get_current_pid_tgid();
+    let args = match unsafe { ACTIVE_CALLS.get(&key) } { Some(a) => *a, None => return };
+    let _ = ACTIVE_CALLS.remove(&key);
+
+    // _ex returns 1 = success, 0 = failure. NOT a byte count.
+    let ok: i32 = ctx.ret::<i32>();
+    if ok != 1 { return; }
+
+    // The real length lives behind the stashed size_t* (arg 3). Read it from user memory.
+    let mut written: u64 = 0;
+    if unsafe { bpf_probe_read_user(args.count_ptr as *const u64) }
+        .map(|v| { written = v; }).is_err()
+    {
+        incr(stat::USER_READ_FAULT);
+        return;
+    }
+    let _ = emit_event(args, dir, written as i64);
 }
 
 /// Build and submit one `Event` into the ring buffer.
