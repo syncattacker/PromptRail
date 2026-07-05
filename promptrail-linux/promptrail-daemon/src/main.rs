@@ -57,10 +57,8 @@ async fn main() -> anyhow::Result<()> {
     if let Err(e) = run().await {
         error!(error = %e, "fatal");
         // Print the full source chain so the operator sees the root cause.
-        let mut src = std::error::Error::source(&e);
-        while let Some(s) = src {
-            error!(cause = %s);
-            src = s.source();
+        for cause in e.chain().skip(1) {
+            error!(cause = %cause);
         }
         std::process::exit(1);
     }
