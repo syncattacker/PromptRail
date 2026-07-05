@@ -1,8 +1,6 @@
 [workspace]
 resolver = "2"
 
-# NOTE the deliberate ABSENCE of `promptrail-ebpf` from this list.
-#
 # The eBPF crate must be built for the `bpfel-unknown-none` target with a
 # *pinned nightly* and `-Z build-std=core`. The rest of the workspace builds for
 # the host with *stable*. If `promptrail-ebpf` were a normal workspace member,
@@ -15,9 +13,10 @@ resolver = "2"
 members = [
     "promptrail-common",
     "promptrail-daemon",
-    "promptrail-ebpf",
     "promptrail-test-harness",
 ]
+
+exclude = ["promptrail-ebpf"]
 
 default-members = ["promptrail-daemon", "promptrail-test-harness"]
 
