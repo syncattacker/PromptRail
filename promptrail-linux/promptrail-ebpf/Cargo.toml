@@ -1,4 +1,3 @@
-[workspace]
 [package]
 name = "promptrail-ebpf"
 version = "0.1.0"
