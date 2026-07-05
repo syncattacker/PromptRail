@@ -23,9 +23,9 @@
 
 use aya_ebpf::{
     helpers::{
-        bpf_get_current_comm, bpf_get_current_pid_tgid, bpf_get_current_uid_gid,
-        bpf_ktime_get_ns, bpf_probe_read_user_buf,
-    },
+    bpf_get_current_comm, bpf_get_current_pid_tgid, bpf_get_current_uid_gid,
+    bpf_ktime_get_ns, bpf_probe_read_user, bpf_probe_read_user_buf,
+},
     macros::{map, uprobe, uretprobe},
     maps::{HashMap, PerCpuArray, RingBuf},
     programs::{ProbeContext, RetProbeContext},
@@ -104,6 +104,22 @@ pub fn ssl_read_entry(ctx: ProbeContext) -> u32 {
     0
 }
 
+#[uprobe]
+pub fn ssl_write_ex_entry(ctx: ProbeContext) -> u32 {
+    if stash_entry_ex(&ctx).is_err() {
+        incr(stat::STASH_FULL);
+    }
+    0
+}
+
+#[uprobe]
+pub fn ssl_read_ex_entry(ctx: ProbeContext) -> u32 {
+    if stash_entry_ex(&ctx).is_err() {
+        incr(stat::STASH_FULL);
+    }
+    0
+}
+
 #[uretprobe]
 pub fn ssl_write_ex_ret(ctx: RetProbeContext) -> u32 { on_return_ex(&ctx, direction::WRITE); 0 }
 #[uretprobe]
@@ -137,6 +153,7 @@ fn stash_entry(ctx: &ProbeContext) -> Result<(), i64> {
     let args = SslArgs {
         ssl: ssl as u64,
         buf: buf as u64,
+        count_ptr: 0,
     };
     // `insert` can fail if the map is full; propagate so the caller can log.
     ACTIVE_CALLS.insert(&key, &args, 0).map_err(|e| e as i64)
