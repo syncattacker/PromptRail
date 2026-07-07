@@ -89,6 +89,4 @@ overflow-checks = false
 opt-level = 3
 debug = false
 overflow-checks = false
-lto = true
-codegen-units = 1
 
