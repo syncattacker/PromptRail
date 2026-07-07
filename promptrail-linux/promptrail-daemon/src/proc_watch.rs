@@ -54,7 +54,8 @@ fn classify_pid(pid: u32) -> Option<TlsBackend> {
     let (mut openssl, mut gnutls, mut nss) = (false, false, false);
     for line in maps.lines() {
         // Only libssl carries SSL_read/SSL_write. libcrypto is a common
-        // transitive dep (GnuTLS tooling, p11-kit) and must NOT imply OpenSSL.
+        // transitive dependency (GnuTLS tooling, p11-kit, many CLIs) and does
+        // NOT imply OpenSSL is the TLS provider — so it must not trigger OpenSsl.
         if line.contains("libssl.so") {
             openssl = true;
         } else if line.contains("libgnutls.so") {
@@ -63,12 +64,18 @@ fn classify_pid(pid: u32) -> Option<TlsBackend> {
             nss = true;
         }
     }
-    // GnuTLS/NSS take precedence: if present, report the backend our OpenSSL
-    // hook does NOT cover, so the coverage gap stays visible.
-    Some(if gnutls { TlsBackend::GnuTls }
-         else if nss { TlsBackend::Nss }
-         else if openssl { TlsBackend::OpenSsl }
-         else { TlsBackend::Opaque })
+    // Precedence: if a process maps libgnutls/libnss it is doing TLS via a
+    // backend our OpenSSL hook does NOT cover; report that so the coverage gap
+    // stays visible even when libcrypto is also present.
+    Some(if gnutls {
+        TlsBackend::GnuTls
+    } else if nss {
+        TlsBackend::Nss
+    } else if openssl {
+        TlsBackend::OpenSsl
+    } else {
+        TlsBackend::Opaque
+    })
 }
 
 /// Read a process's `comm` for friendlier logging. Best-effort.
