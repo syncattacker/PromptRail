@@ -80,13 +80,3 @@ panic = "abort"
 [profile.dev]
 panic = "abort"
 
-[profile.dev.package."promptrail-ebpf"]
-opt-level = 3
-debug = false
-overflow-checks = false
-
-[profile.release.package."promptrail-ebpf"]
-opt-level = 3
-debug = false
-overflow-checks = false
-
