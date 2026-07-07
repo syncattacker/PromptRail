@@ -23,17 +23,3 @@ promptrail-common = { path = "../promptrail-common" }
 name = "promptrail-ebpf"
 path = "src/main.rs"
 
-# eBPF objects are always built optimized: the verifier rejects the huge,
-# un-inlined stack frames that a debug build produces. This applies even when
-# the daemon itself is built in debug.
-[profile.dev]
-opt-level = 3
-debug = false
-overflow-checks = false
-
-[profile.release]
-opt-level = 3
-debug = false
-overflow-checks = false
-lto = true
-codegen-units = 1

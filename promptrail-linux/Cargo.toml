@@ -68,8 +68,9 @@ anyhow = "1"
 # tonic = "0.12"
 # rustls = "0.23"
 
-# Release profile for the userspace binaries. eBPF profile lives in the ebpf
-# crate's own manifest (different target, different constraints).
+# Workspace profiles. The eBPF crate is built separately via build.rs, but it
+# still needs optimized settings; keep them here so Cargo does not warn about
+# profile blocks in a non-root package.
 [profile.release]
 lto = true
 codegen-units = 1
@@ -78,4 +79,16 @@ panic = "abort"
 
 [profile.dev]
 panic = "abort"
+
+[profile.dev.package."promptrail-ebpf"]
+opt-level = 3
+debug = false
+overflow-checks = false
+
+[profile.release.package."promptrail-ebpf"]
+opt-level = 3
+debug = false
+overflow-checks = false
+lto = true
+codegen-units = 1
 
