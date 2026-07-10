@@ -46,6 +46,8 @@
 // lands so the remaining-unused items (if any) are caught again.
 #![allow(dead_code)]
 
+pub mod pattern;
+
 use std::path::Path;
 
 use thiserror::Error;
