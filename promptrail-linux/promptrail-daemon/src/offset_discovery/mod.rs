@@ -115,16 +115,7 @@ pub enum DiscoveryError {
     NoExecutableSegment { path: String },
 }
 
-// ---------------------------------------------------------------------------
-// Shared output type
-// ---------------------------------------------------------------------------
 
-/// Which BoringSSL entry point a candidate resolves. Only the classic API is
-/// relevant for VS Code: the pinned BoringSSL commit
-/// (`d8be2b4a71155bf82da092ef543176351eeb59ff`, from Chromium 148.0.7778.271)
-/// has NO `SSL_write_ex`/`SSL_read_ex` — verified in `ssl/ssl_lib.cc`. So the
-/// classic entry/return capture path (return value == byte count,
-/// `count_ptr == 0`) is correct and the `_ex` programs are never attached here.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum TargetFn {
     SslWrite,

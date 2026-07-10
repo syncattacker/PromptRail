@@ -37,3 +37,70 @@ BoringSSL HPKE KDFs. Check your Key Config.Repor
 BoringSSL redemption state (possibly due to bad b
 
 BoringSSLU:C
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+// ---------------------------------------------------------------------------
+// Shared output type
+// ---------------------------------------------------------------------------
+
+/// Which BoringSSL entry point a candidate resolves. Only the classic API is
+/// relevant for VS Code: the pinned BoringSSL commit
+/// (`d8be2b4a71155bf82da092ef543176351eeb59ff`, from Chromium 148.0.7778.271)
+/// has NO `SSL_write_ex`/`SSL_read_ex` — verified in `ssl/ssl_lib.cc`. So the
+/// classic entry/return capture path (return value == byte count,
+/// `count_ptr == 0`) is correct and the `_ex` programs are never attached here.
+
+//! Stage 1 of the offset-discovery funnel: localize BoringSSL's `ssl_lib.cc`
+//! translation unit inside the stripped 200 MiB VS Code blob, reducing ~500k
+//! generic prologue candidates to ~12 per-function reference clusters.
+//!
+//! ## Why this works (and what it deliberately does NOT decide)
+//!
+//! Every `OPENSSL_PUT_ERROR(...)` in BoringSSL expands to
+//! `ERR_put_error(..., __FILE__, __LINE__)`, so every error path in `ssl_lib.cc`
+//! emits a `lea reg,[rip+disp32]` loading the address of the *same* rodata
+//! string — its source path, embedded verbatim as
+//! `../../third_party/boringssl/src/ssl/ssl_lib.cc`. Finding that string and
+//! counting the `lea` sites that point at it localizes us to the functions of
+//! that one translation unit.
+//!
+//! Under Chromium's LTO/PGO layout those functions are flung megabytes apart in
+//! `.text`, but each *function's* error-path `lea`s stay within a few hundred
+//! bytes of each other. So proximity-clustering the reference sites yields one
+//! cluster per function, and the cluster's *reference count* is a signature:
+//!   * `SSL_write` has exactly 4 `OPENSSL_PUT_ERROR` sites (QUIC / uninitialized
+//!     / handshake-failure / bad-length) → a 4-ref cluster.
+//!   * `SSL_read` has NONE (it is a thin `SSL_peek` wrapper), so it is NOT a
+//!     cluster. It is reached in Stage 2 via `SSL_peek`, which DOES have one
+//!     error site → a 1-ref cluster; `SSL_read` calls `SSL_peek` first.
+//! Both facts were verified against the pinned source (commit
+//! `d8be2b4a71155bf82da092ef543176351eeb59ff`).
+//!
+//! ## Scope boundary
+//! This stage produces *candidate clusters*, NOT confirmed function offsets. A
+//! cluster's addresses are `lea` *reference sites* inside a function, not its
+//! entry, and the ref-count → role mapping is a PROVISIONAL guess. Stage 2
+//! (`disasm`/predicate) back-walks each candidate to the function entry and
+//! confirms it structurally before any `OffsetCandidate` is produced. Nothing
+//! here disassembles, and nothing here is fed to a uprobe.
+//!
+//! Validated end-to-end against `ws2_xref.py` on the real target: 39 references,
+//! 12 clusters at the default gap, exactly one 4-ref cluster (SSL_write).
