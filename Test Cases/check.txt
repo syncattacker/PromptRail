@@ -1,0 +1,39 @@
+echo "== Chromium =="
+
+grep -aoE 'Chrome/[0-9]+(\.[0-9]+){3}' /usr/share/code/code | sort -u | head
+
+echo "== Electron =="
+
+grep -aoE 'Electron/[0-9]+(\.[0-9]+){2,3}' /usr/share/code/code | sort -u | head
+
+echo "== BoringSSL marker (may be absent; not conclusive if empty) =="
+
+grep -aoE 'BoringSSL[^"]{0,40}' /usr/share/code/code | sort -u | head
+
+== Chromium ==
+
+Chrome/148.0.7778.271
+
+== Electron ==
+
+Electron/42.5.0
+
+== BoringSSL marker (may be absent; not conclusive if empty) ==
+
+BoringSSL,
+
+BoringSSLCertificate from PEM string.Failed to d
+
+BoringSSLContinueSSLTRANSPORT_SECURITY_STATE_SH
+
+BoringSSLForRandBytes/proc/self/fd+
+
+BoringSSL, hasInspector } = config;
+
+BoringSSL HKDFs.'. Stream has both SSRCs and RID
+
+BoringSSL HPKE KDFs. Check your Key Config.Repor
+
+BoringSSL redemption state (possibly due to bad b
+
+BoringSSLU:C
