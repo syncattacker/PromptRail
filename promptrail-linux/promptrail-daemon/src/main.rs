@@ -27,9 +27,10 @@ use promptrail_common::{direction, stat, Event};
 
 mod error;
 mod proc_watch;
-#![allow(dead_code)]
 mod offset_discovery; 
 
+#![allow(dead_code)]
+use std::path::Path;
 use error::AgentError;
 
 /// (eBPF program function name, exported symbol to attach to). Entry and return
@@ -128,7 +129,9 @@ async fn run() -> anyhow::Result<()> {
     Ok(())
 }
 
+
 /// Load and attach all four uprobe programs. Any failure is fatal and typed.
+#[allow(clippy::result_large_err)]
 fn attach_probes(ebpf: &mut Ebpf) -> Result<(), AgentError> {
     let libssl_target = proc_watch::resolve_libssl_target();
     info!(target = %libssl_target, "attaching uprobes to libssl target");
