@@ -41,7 +41,6 @@
 //! `DiscoveryError` instead. See the module review notes for the threat-model
 //! discussion of a deliberately adversarial binary.
 
-#![allow(dead_code)]
 use std::path::Path;
 
 use thiserror::Error;
@@ -245,14 +244,14 @@ impl ElfImage {
         for i in 0..e_phnum {
             // Bounds-check the whole entry before touching any field.
             let base = match e_phoff
-                .checked_add((i as u64).saturating_mul(e_phentsize as u64))
+                .checked_add((i as u64).checked_mul(e_phentsize as u64).unwrap_or(u64::MAX))
             {
                 Some(b) => b as usize,
                 None => break,
             };
             if base
                 .checked_add(PH_ENTSIZE_MIN)
-                .is_none_or(|end| end > data.len())
+                .map_or(true, |end| end > data.len())
             {
                 return Err(DiscoveryError::Malformed {
                     path: path_str,
