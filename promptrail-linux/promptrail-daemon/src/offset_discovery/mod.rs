@@ -482,7 +482,10 @@ mod tests {
     fn rejects_non_elf() {
         let dir = std::env::temp_dir().join("promptrail_notelf_test");
         std::fs::write(&dir, b"not an elf at all, just some bytes........").unwrap();
-        let err = ElfImage::parse(&dir).unwrap_err();
+        let err = match ElfImage::parse(&dir) {
+            Ok(_) => panic!("expected parse to reject a non-ELF file"),
+            Err(e) => e,
+        };
         assert!(matches!(err, DiscoveryError::NotSupportedElf { .. }));
         let _ = std::fs::remove_file(&dir);
     }
