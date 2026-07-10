@@ -27,6 +27,7 @@ use promptrail_common::{direction, stat, Event};
 
 mod error;
 mod proc_watch;
+#![allow(dead_code)]
 mod offset_discovery; 
 
 use error::AgentError;
