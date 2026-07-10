@@ -41,6 +41,11 @@
 //! `DiscoveryError` instead. See the module review notes for the threat-model
 //! discussion of a deliberately adversarial binary.
 
+// Stage-1 scaffolding: the items below have no in-crate caller yet. They are
+// consumed starting in `pattern.rs` (Stage 2). REMOVE this allow when Stage 2
+// lands so the remaining-unused items (if any) are caught again.
+#![allow(dead_code)]
+
 use std::path::Path;
 
 use thiserror::Error;
@@ -243,15 +248,13 @@ impl ElfImage {
         let mut note_ranges = Vec::new();
         for i in 0..e_phnum {
             // Bounds-check the whole entry before touching any field.
-            let base = match e_phoff
-                .checked_add((i as u64).checked_mul(e_phentsize as u64).unwrap_or(u64::MAX))
-            {
+            let base = match e_phoff.checked_add((i as u64).saturating_mul(e_phentsize as u64)) {
                 Some(b) => b as usize,
                 None => break,
             };
             if base
                 .checked_add(PH_ENTSIZE_MIN)
-                .map_or(true, |end| end > data.len())
+                .is_none_or(|end| end > data.len())
             {
                 return Err(DiscoveryError::Malformed {
                     path: path_str,
@@ -360,8 +363,7 @@ impl ElfImage {
             .map(|l| ExecSegment {
                 file_offset: l.file_offset,
                 vaddr: l.vaddr,
-                bytes: &self.data[l.file_offset as usize
-                    ..(l.file_offset + l.file_size) as usize],
+                bytes: &self.data[l.file_offset as usize..(l.file_offset + l.file_size) as usize],
             })
             .collect()
     }
@@ -488,5 +490,49 @@ mod tests {
         };
         assert!(matches!(err, DiscoveryError::NotSupportedElf { .. }));
         let _ = std::fs::remove_file(&dir);
+    }
+
+    /// Real-target validation against the installed VS Code binary. Ignored by
+    /// default (needs the file present); run explicitly:
+    ///   WS2_TARGET=/usr/share/code/code cargo test -p promptrail-daemon \
+    ///       offset_discovery -- --ignored --nocapture
+    ///
+    /// Cross-check the printed numbers against ws2_xref.py:
+    ///   pie = true
+    ///   exec[0] file_offset=0x2bc8000 vaddr=0x2bc9000 size=156706848
+    ///   0x331e00a  (exec)   -> Some(...)          SSL_write ref VA
+    ///   0x1125983  (rodata) -> Some(0x1125983)    ssl_lib.cc string VA
+    #[test]
+    #[ignore]
+    fn probe_real_target() {
+        let Ok(path) = std::env::var("WS2_TARGET") else {
+            return;
+        };
+        let img = ElfImage::parse(std::path::Path::new(&path)).expect("parse target");
+        eprintln!("pie        = {}", img.is_pie());
+        eprintln!("build_id   = {:?}", img.build_id_hex());
+        for (i, s) in img.executable_segments().iter().enumerate() {
+            eprintln!(
+                "exec[{i}]    file_offset=0x{:x} vaddr=0x{:x} size={}",
+                s.file_offset,
+                s.vaddr,
+                s.bytes.len()
+            );
+        }
+        // Exec-segment mapping: SSL_write 4-ref cluster VA from ws2_xref.py.
+        let va = 0x331e00a_u64;
+        eprintln!(
+            "0x{va:x} (exec)   -> file offset {:?}",
+            img.vaddr_to_file_offset(va)
+        );
+        // Rodata-segment mapping: the ssl_lib.cc string VA from ws2_xref.py.
+        // Its file offset and vaddr were equal in the diagnostic, so this
+        // should map to itself — confirming the non-executable PT_LOAD is
+        // handled too, which Stage 1 depends on for the string search.
+        let str_va = 0x1125983_u64;
+        eprintln!(
+            "0x{str_va:x} (rodata) -> file offset {:?}",
+            img.vaddr_to_file_offset(str_va)
+        );
     }
 }
