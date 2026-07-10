@@ -139,42 +139,72 @@ def scan_lea_rip_to(elf, target_vaddr):
     return hits
 
 
-def cluster_report(hits):
+def cluster_refs(hits, gap):
+    """Group sorted reference addresses into clusters, splitting wherever the
+    gap between consecutive refs exceeds `gap` bytes. Each cluster ~ one
+    function's error-path references (LTO co-locates a function's body, so its
+    OPENSSL_PUT_ERROR lea sites stay within a few hundred bytes, while distinct
+    functions are separated by MB under LTO layout)."""
+    clusters = []
+    cur = []
+    for h in sorted(hits):
+        if cur and h - cur[-1] > gap:
+            clusters.append(cur)
+            cur = []
+        cur.append(h)
+    if cur:
+        clusters.append(cur)
+    return clusters
+
+
+def cluster_report(hits, gap):
     if not hits:
         print("      (no references)")
         return
     lo, hi = min(hits), max(hits)
-    span = hi - lo
     print(f"      references: {len(hits)}")
-    print(f"      addr range: 0x{lo:x} .. 0x{hi:x}   span={span:,} bytes "
-          f"({span/1024:.1f} KiB)")
-    # crude clustering: bucket by 64 KiB windows, show distribution
-    buckets = {}
-    for h in hits:
-        buckets[h >> 16] = buckets.get(h >> 16, 0) + 1
-    print(f"      distinct 64 KiB windows touched: {len(buckets)}")
-    if span <= 512 * 1024:
-        print("      -> CLUSTERED (all within a <=512 KiB region — one TU's .text)")
-    elif len(buckets) <= 4:
-        print("      -> mostly clustered (few windows)")
-    else:
-        print("      -> SCATTERED (spread across many regions — anchor is weak)")
-    shown = sorted(hits)[:16]
-    print("      sample referencing sites: " +
-          " ".join(f"0x{h:x}" for h in shown) +
-          ("  …" if len(hits) > len(shown) else ""))
+    print(f"      overall addr range: 0x{lo:x} .. 0x{hi:x}   "
+          f"span={hi-lo:,} bytes")
+    clusters = cluster_refs(hits, gap)
+    print(f"      proximity clusters (gap>{gap}B splits): {len(clusters)}")
+    print(f"      => ~{len(clusters)} candidate functions in this TU\n")
+    # Distribution of cluster sizes — the signature selector.
+    from collections import Counter
+    dist = Counter(len(c) for c in clusters)
+    print("      cluster-size distribution (refs_per_fn: count):")
+    for size in sorted(dist, reverse=True):
+        tag = ""
+        if size == 4:
+            tag = "  <-- SSL_write candidate(s) (4 OPENSSL_PUT_ERROR sites)"
+        elif size == 1:
+            tag = "  <-- SSL_peek candidate(s) (1 site; SSL_read calls it first)"
+        print(f"        {size} ref(s): {dist[size]} cluster(s){tag}")
+    print()
+    # Per-cluster detail: address + count + internal span.
+    print("      per-cluster (addr of first ref / count / internal span):")
+    for i, c in enumerate(clusters):
+        span = c[-1] - c[0]
+        note = ""
+        if len(c) == 4:
+            note = "  *** SSL_write candidate ***"
+        elif len(c) == 1:
+            note = "  (SSL_peek candidate)"
+        print(f"        [{i:2}] 0x{c[0]:x}  refs={len(c)}  span={span}B{note}")
 
 
 def main():
     args = sys.argv[1:]
     path = DEFAULT_BINARY
     needles = []
+    gap = 4096  # max intra-function byte gap between error-path lea sites
     i = 0
     while i < len(args):
         if args[i] == "--binary" and i + 1 < len(args):
             path = args[i + 1]; i += 2; continue
         if args[i] == "--needle" and i + 1 < len(args):
             needles.append(args[i + 1].encode()); i += 2; continue
+        if args[i] == "--gap" and i + 1 < len(args):
+            gap = int(args[i + 1], 0); i += 2; continue
         i += 1
     if not needles:
         needles = DEFAULT_NEEDLES
@@ -212,7 +242,7 @@ def main():
                 print("    (string not in a loadable segment; cannot xref)")
                 continue
             hits = scan_lea_rip_to(elf, vaddr)
-            cluster_report(hits)
+            cluster_report(hits, gap)
         print()
 
     if not any_found:
