@@ -29,8 +29,7 @@ mod error;
 mod proc_watch;
 mod offset_discovery; 
 
-#![allow(dead_code)]
-use std::path::Path;
+
 use error::AgentError;
 
 /// (eBPF program function name, exported symbol to attach to). Entry and return

@@ -41,6 +41,7 @@
 //! `DiscoveryError` instead. See the module review notes for the threat-model
 //! discussion of a deliberately adversarial binary.
 
+#![allow(dead_code)]
 use std::path::Path;
 
 use thiserror::Error;
