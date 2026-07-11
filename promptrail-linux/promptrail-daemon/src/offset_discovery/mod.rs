@@ -47,6 +47,7 @@
 #![allow(dead_code)]
 
 pub mod pattern;
+pub mod disasm;
 
 use std::path::Path;
 
